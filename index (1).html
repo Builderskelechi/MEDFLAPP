@@ -1,0 +1,1621 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>MedFlow Dashboard</title>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>body { margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, sans-serif; background: #0d1117; }</style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+const { useState, useEffect, useCallback } = React;
+
+// ─────────────────────────────────────────────
+// THEME & CONSTANTS
+// ─────────────────────────────────────────────
+const THEME = {
+  bg: "#f8fafc",
+  cardBg: "#ffffff",
+  textPrimary: "#0f172a",
+  textSecondary: "#64748b",
+  border: "#e2e8f0",
+  primary: "#0ea5e9",
+  primaryLight: "#e0f2fe",
+};
+
+const QUEUE_STATES = [
+  "AWAITING_TRIAGE",
+  "AWAITING_DOCTOR",
+  "AWAITING_DOCTOR_REVIEW",
+  "AWAITING_PHARMACY",
+  "DISCHARGED",
+];
+const STATE_LABELS = {
+  AWAITING_TRIAGE: "Awaiting Triage",
+  AWAITING_DOCTOR: "Awaiting Doctor",
+  AWAITING_DOCTOR_REVIEW: "Doctor Review",
+  AWAITING_PHARMACY: "Awaiting Pharmacy",
+  DISCHARGED: "Discharged",
+};
+const STATE_COLORS = {
+  AWAITING_TRIAGE: "#d97706",
+  AWAITING_DOCTOR: "#2563eb",
+  AWAITING_DOCTOR_REVIEW: "#0891b2",
+  AWAITING_PHARMACY: "#db2777",
+  DISCHARGED: "#059669",
+};
+
+const DEFAULT_DRUGS = [
+  { id: 1, name: "Paracetamol 500mg", stock: 120 },
+  { id: 2, name: "Amoxicillin 250mg", stock: 80 },
+  { id: 3, name: "Ibuprofen 400mg", stock: 95 },
+  { id: 4, name: "Metformin 500mg", stock: 60 },
+  { id: 5, name: "Amlodipine 5mg", stock: 45 },
+  { id: 6, name: "Omeprazole 20mg", stock: 70 },
+  { id: 7, name: "Ciprofloxacin 500mg", stock: 55 },
+  { id: 8, name: "Lisinopril 10mg", stock: 30 },
+  { id: 9, name: "Atorvastatin 20mg", stock: 40 },
+  { id: 10, name: "Azithromycin 500mg", stock: 25 },
+  { id: 11, name: "Metronidazole 400mg", stock: 85 },
+  { id: 12, name: "Artemether-Lumefantrine", stock: 50 },
+];
+
+const getFormattedDateTime = () => {
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  const hh = String(now.getHours()).padStart(2, '0');
+  const min = String(now.getMinutes()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd} ${hh}:${min}`;
+};
+
+const SEED_PATIENTS = [
+  { id: 1, patientId: "PT-1001", pin: "1001", name: "Babaloks Leonard", age: 45, phone: "08012345678", email: "babaloks@mail.com", nextOfKin: "Mary Leonard", kinPhone: "08011112222", history: ["Hypertension since 2021"], complaint: "Severe headache and dizziness", temperature: 38.5, weight: 82.0, state: "AWAITING_DOCTOR", doctor: "Dr. Builders Kelechi", vitals: true, priority: "HIGH", arrivalTime: "2026-05-21 02:30" },
+  { id: 2, patientId: "PT-1002", pin: "1002", name: "Gideon Patrick", age: 32, phone: "08087654321", email: "gideon@mail.com", nextOfKin: "Grace Patrick", kinPhone: "08022223333", history: ["No major medical history"], complaint: "Acute abdominal pain", temperature: 37.2, weight: 75.5, state: "AWAITING_TRIAGE", doctor: null, vitals: true, priority: "HIGH", arrivalTime: "2026-05-21 03:00" },
+  { id: 3, patientId: "PT-1003", pin: "1003", name: "Chioma Nwachukwu", age: 28, phone: "08099998888", email: "chioma@mail.com", nextOfKin: "Clement Nwachukwu", kinPhone: "08033334444", history: ["Allergic to Penicillin"], complaint: "Persistent dry cough", temperature: 37.8, weight: 64.0, state: "AWAITING_DOCTOR_REVIEW", doctor: "Dr. Builders Kelechi", vitals: true, priority: "NORMAL", arrivalTime: "2026-05-21 01:15" },
+  { id: 4, patientId: "PT-1004", pin: "1004", name: "Musa Ibrahim", age: 60, phone: "08055554444", email: "musa@mail.com", nextOfKin: "Aliyu Ibrahim", kinPhone: "08044445555", history: ["Type 2 Diabetes"], complaint: "Blood sugar check and medication refill", temperature: 36.8, weight: 90.5, state: "AWAITING_PHARMACY", doctor: "Dr. Ekanem Ruby", vitals: true, priority: "HIGH", prescriptions: [{drug: "Metformin 500mg", status: "PENDING"}], arrivalTime: "2026-05-21 04:20" },
+  { id: 5, patientId: "PT-1005", pin: "1005", name: "Tunde Bakare", age: 19, phone: "08077776666", email: "tunde@mail.com", nextOfKin: "Funke Bakare", kinPhone: "08055556666", history: [], complaint: "Mild throat irritation", temperature: 36.6, weight: 70.0, state: "DISCHARGED", doctor: "Dr. Builders Kelechi", vitals: true, priority: "NORMAL", arrivalTime: "2026-05-21 04:30" },
+  { id: 6, patientId: "PT-1006", pin: "1006", name: "Ngozi Bello", age: 50, phone: "08011113333", email: "ngozi@mail.com", nextOfKin: "Kabir Bello", kinPhone: "08066667777", history: ["Asthma"], complaint: "Shortness of breath", temperature: 37.4, weight: 68.0, state: "AWAITING_TRIAGE", doctor: null, vitals: true, priority: "NORMAL", arrivalTime: "2026-05-21 04:45" },
+  { id: 7, patientId: "PT-1007", pin: "1007", name: "Obinna Okeke", age: 37, phone: "08022224444", email: "obinna@mail.com", nextOfKin: "Chidi Okeke", kinPhone: "08077778888", history: [], complaint: "Fever and chills", temperature: 39.2, weight: 78.0, state: "AWAITING_DOCTOR", doctor: "Dr. Ekanem Ruby", vitals: true, priority: "HIGH", arrivalTime: "2026-05-21 04:10" },
+  { id: 8, patientId: "PT-1008", pin: "1008", name: "Amina Yusuf", age: 24, phone: "08033335555", email: "amina@mail.com", nextOfKin: "Yusuf Haruna", kinPhone: "08088889999", history: [], complaint: "General body weakness", temperature: 37.0, weight: 58.5, state: "AWAITING_TRIAGE", doctor: null, vitals: true, priority: "NORMAL", arrivalTime: "2026-05-21 05:00" },
+];
+
+const SEED_USERS = [
+  { id: 1, name: "Ekanem Itoro", role: "Admin", pin: "0000" },
+  { id: 2, name: "Nurse Peter Ann", role: "Nurse", pin: "1111" },
+  { id: 3, name: "Dr. Builders Kelechi", role: "Doctor", pin: "2222" },
+  { id: 4, name: "Dr. Ekanem Ruby", role: "Doctor", pin: "3333" },
+  { id: 5, name: "Pharmacist Builders Chinenye", role: "Pharmacist", pin: "4444" },
+];
+
+const sortPatients = (pats) => [...pats].sort((a, b) => {
+  if (a.priority === "HIGH" && b.priority !== "HIGH") return -1;
+  if (b.priority === "HIGH" && a.priority !== "HIGH") return 1;
+  const timeA = a.arrivalTime ? new Date(a.arrivalTime).getTime() : 0;
+  const timeB = b.arrivalTime ? new Date(b.arrivalTime).getTime() : 0;
+  if (timeA !== timeB) return timeA - timeB;
+  return a.id - b.id;
+});
+
+// ─────────────────────────────────────────────
+// ICONS (inline SVG)
+// ─────────────────────────────────────────────
+const Icon = ({ d, size = 18, color = "currentColor", strokeWidth = 2 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+    <path d={d} />
+  </svg>
+);
+
+const Icons = {
+  users: "M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75",
+  activity: "M22 12h-4l-3 9L9 3l-3 9H2",
+  pill: "M10.5 20H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v7.5M12 12H2M12 12V4M22 19a3 3 0 1 1-6 0 3 3 0 0 1 6 0zM19 16v6M16 19h6",
+  shield: "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z",
+  logout: "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9",
+  check: "M20 6 9 17l-5-5",
+  x: "M18 6 6 18M6 6l12 12",
+  thermometer: "M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z",
+  weight: "M4 7a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v1a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1zM12 17v-4M8 21h8M8 21a2 2 0 0 0 0-4h8a2 2 0 0 0 0 4",
+  home: "m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z",
+  clock: "M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2zM12 6v6l4 2",
+  arrow: "M5 12h14M12 5l7 7-7 7",
+  lock: "M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2zM7 11V7a5 5 0 0 1 10 0v4",
+  wifi: "M5 12.55a11 11 0 0 1 14.08 0M1.42 9a16 16 0 0 1 21.16 0M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01",
+  eye: "M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z",
+  chart: "M18 20V10M12 20V4M6 20v-6",
+  search: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z",
+  userPlus: "M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2m14-10a4 4 0 100-8 4 4 0 000 8zm8 2h-6m3-3v6",
+  alertTriangle: "M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z",
+  trash: "M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+};
+
+// ─────────────────────────────────────────────
+// COMPONENTS
+// ─────────────────────────────────────────────
+const Badge = ({ state }) => (
+  <span style={{
+    background: STATE_COLORS[state] + "1A",
+    color: STATE_COLORS[state],
+    border: `1px solid ${STATE_COLORS[state]}33`,
+    borderRadius: 6,
+    padding: "4px 10px",
+    fontSize: 11,
+    fontWeight: 700,
+    letterSpacing: 0.5,
+    whiteSpace: "nowrap",
+  }}>
+    {STATE_LABELS[state]}
+  </span>
+);
+
+const PriorityBadge = ({ level }) => {
+  const isHigh = level === "HIGH";
+  return (
+    <span style={{
+      background: isHigh ? "#fef2f2" : "#f0fdf4",
+      color: isHigh ? "#ef4444" : "#10b981",
+      border: `1px solid ${isHigh ? "#ef444444" : "#10b98144"}`,
+      borderRadius: 6, padding: "2px 6px", fontSize: 10, fontWeight: 800,
+      display: "inline-flex", alignItems: "center", gap: 4
+    }}>
+      {isHigh && <Icon d={Icons.alertTriangle} size={10} />}
+      {isHigh ? "EMERGENCY" : "STANDARD"}
+    </span>
+  );
+}
+
+const Card = ({ children, style = {} }) => (
+  <div style={{
+    background: THEME.cardBg,
+    border: `1px solid ${THEME.border}`,
+    borderRadius: 12,
+    padding: 20,
+    boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
+    ...style,
+  }}>
+    {children}
+  </div>
+);
+
+const StatCard = ({ label, value, icon, color = THEME.primary }) => (
+  <Card style={{ display: "flex", alignItems: "center", gap: 16 }}>
+    <div style={{
+      background: color + "15",
+      borderRadius: 10,
+      padding: 12,
+      color,
+      flexShrink: 0,
+    }}>
+      <Icon d={Icons[icon]} size={22} color={color} />
+    </div>
+    <div>
+      <div style={{ color: THEME.textSecondary, fontSize: 12, marginBottom: 4 }}>{label}</div>
+      <div style={{ color: THEME.textPrimary, fontSize: 24, fontWeight: 800 }}>{value}</div>
+    </div>
+  </Card>
+);
+
+const Button = ({ children, onClick, variant = "primary", small = false, disabled = false, style = {} }) => {
+  const base = {
+    border: "none",
+    borderRadius: 8,
+    cursor: disabled ? "not-allowed" : "pointer",
+    fontWeight: 600,
+    fontSize: small ? 12 : 13,
+    padding: small ? "8px 14px" : "10px 18px",
+    opacity: disabled ? 0.5 : 1,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    transition: "all 0.15s",
+    ...style,
+  };
+  const variants = {
+    primary: { background: THEME.primary, color: "#fff" },
+    danger: { background: "#ef4444", color: "#fff" },
+    outline: { background: "transparent", color: THEME.textSecondary, border: `1px solid ${THEME.border}` },
+    ghost: { background: "#f1f5f9", color: THEME.textPrimary },
+    warning: { background: "#f59e0b", color: "#fff" },
+    pink: { background: "#ec4899", color: "#fff" },
+  };
+  return (
+    <button onClick={disabled ? undefined : onClick} style={{ ...base, ...variants[variant] }}>
+      {children}
+    </button>
+  );
+};
+
+const Input = ({ placeholder, value, onChange, type = "text", onKeyDown, style = {} }) => (
+  <input
+    type={type}
+    placeholder={placeholder}
+    value={value}
+    onChange={e => onChange(e.target.value)}
+    onKeyDown={onKeyDown}
+    style={{
+      background: "#fff",
+      border: `1px solid ${THEME.border}`,
+      borderRadius: 8,
+      color: THEME.textPrimary,
+      padding: "10px 14px",
+      fontSize: 13,
+      outline: "none",
+      width: "100%",
+      boxSizing: "border-box",
+      transition: "border-color 0.2s",
+      ...style,
+    }}
+  />
+);
+
+const Select = ({ value, onChange, options, style = {} }) => (
+  <select
+    value={value}
+    onChange={e => onChange(e.target.value)}
+    style={{
+      background: "#fff",
+      border: `1px solid ${THEME.border}`,
+      borderRadius: 8,
+      color: THEME.textPrimary,
+      padding: "10px 14px",
+      fontSize: 13,
+      outline: "none",
+      width: "100%",
+      boxSizing: "border-box",
+      ...style,
+    }}
+  >
+    {options.map(o => (
+      <option key={o.value} value={o.value}>{o.label}</option>
+    ))}
+  </select>
+);
+
+const Modal = ({ title, onClose, children }) => (
+  <div style={{
+    position: "fixed", inset: 0, background: "rgba(15, 23, 42, 0.4)", backdropFilter: "blur(4px)",
+    display: "flex", alignItems: "center", justifyContent: "center",
+    zIndex: 1000, padding: 20,
+  }}>
+    <div style={{
+      background: THEME.cardBg, border: `1px solid ${THEME.border}`, borderRadius: 16,
+      padding: 28, width: "100%", maxWidth: 480, maxHeight: "90vh", overflowY: "auto",
+      boxShadow: "0 10px 25px rgba(0,0,0,0.1)",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+        <h3 style={{ margin: 0, color: THEME.textPrimary, fontSize: 18, fontWeight: 700 }}>{title}</h3>
+        <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: THEME.textSecondary }}>
+          <Icon d={Icons.x} size={20} />
+        </button>
+      </div>
+      {children}
+    </div>
+  </div>
+);
+
+// ─────────────────────────────────────────────
+// VIEWS
+// ─────────────────────────────────────────────
+
+// NURSE: REGISTRATION VIEW
+function RegistrationView({ patients, setPatients, patientCounter, setPatientCounter }) {
+  const [name, setName] = useState("");
+  const [age, setAge] = useState("");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [nextOfKin, setNextOfKin] = useState("");
+  const [kinPhone, setKinPhone] = useState("");
+  const [complaint, setComplaint] = useState("");
+  const [priority, setPriority] = useState("NORMAL");
+  
+  const generateRandomPin = () => Math.floor(1000 + Math.random() * 9000).toString();
+  const [pin, setPin] = useState("");
+  const [registeredCredentials, setRegisteredCredentials] = useState(null);
+  const [notification, setNotification] = useState(null);
+
+  useEffect(() => {
+    if (!pin) {
+      setPin(generateRandomPin());
+    }
+  }, [pin]);
+
+  const notify = (msg) => { setNotification(msg); setTimeout(() => setNotification(null), 4000); };
+
+  const registerPatient = () => {
+    if (!name || !age || !phone) return notify("Name, age and phone are required.");
+    
+    const newIdNum = patientCounter + 1;
+    const newPatientId = `PT-100${newIdNum}`;
+    const patientPin = pin || generateRandomPin(); 
+    const arrivalTime = getFormattedDateTime();
+
+    const newPatient = {
+      id: newIdNum,
+      patientId: newPatientId,
+      pin: patientPin,
+      name,
+      age: parseInt(age),
+      phone,
+      email,
+      nextOfKin,
+      kinPhone,
+      history: [],
+      complaint,
+      priority,
+      temperature: null,
+      weight: null,
+      state: "AWAITING_TRIAGE",
+      doctor: null,
+      vitals: false,
+      consultationNote: "",
+      prescriptions: [],
+      arrivalTime,
+    };
+    
+    setPatients(prev => [...prev, newPatient]);
+    setPatientCounter(newIdNum);
+    setRegisteredCredentials({
+      name,
+      patientId: newPatientId,
+      pin: patientPin,
+      arrivalTime,
+    });
+    setName(""); setAge(""); setPhone(""); setEmail(""); setNextOfKin(""); setKinPhone(""); setComplaint(""); setPriority("NORMAL");
+    setPin(generateRandomPin());
+  };
+
+  return (
+    <div style={{ maxWidth: 800, margin: "0 auto" }}>
+      {notification && (
+        <div style={{ position: "fixed", top: 20, right: 20, zIndex: 999, background: THEME.primary, color: "#fff", padding: "12px 20px", borderRadius: 10, fontWeight: 600, fontSize: 13 }}>
+          {notification}
+        </div>
+      )}
+
+      {registeredCredentials && (
+        <Modal title="Registration Successful" onClose={() => setRegisteredCredentials(null)}>
+          <div style={{ textAlign: "center", padding: "10px 0" }}>
+            <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#f0fdf4", color: "#10b981", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
+              <Icon d={Icons.check} size={28} />
+            </div>
+            <h4 style={{ margin: "0 0 8px 0", color: THEME.textPrimary, fontSize: 16 }}>Patient Credentials Generated</h4>
+            <p style={{ color: THEME.textSecondary, fontSize: 13, marginBottom: 20 }}>Please share these details with the patient for portal access.</p>
+            
+            <div style={{ background: THEME.bg, borderRadius: 8, padding: 16, textAlign: "left", display: "flex", flexDirection: "column", gap: 12, border: `1px solid ${THEME.border}`, marginBottom: 24 }}>
+              <div>
+                <div style={{ fontSize: 10, color: THEME.textSecondary, fontWeight: 700 }}>PATIENT NAME</div>
+                <div style={{ fontSize: 14, color: THEME.textPrimary, fontWeight: 700 }}>{registeredCredentials.name}</div>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div>
+                  <div style={{ fontSize: 10, color: THEME.textSecondary, fontWeight: 700 }}>PATIENT ID</div>
+                  <div style={{ fontSize: 14, color: THEME.primary, fontWeight: 800, fontFamily: "monospace" }}>{registeredCredentials.patientId}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 10, color: THEME.textSecondary, fontWeight: 700 }}>PERSONAL PIN / PASSWORD</div>
+                  <div style={{ fontSize: 14, color: "#10b981", fontWeight: 800, fontFamily: "monospace" }}>{registeredCredentials.pin}</div>
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: 10, color: THEME.textSecondary, fontWeight: 700 }}>ARRIVAL TIME</div>
+                <div style={{ fontSize: 13, color: THEME.textPrimary, fontWeight: 600 }}>{registeredCredentials.arrivalTime}</div>
+              </div>
+            </div>
+            
+            <div style={{ display: "flex", gap: 12 }}>
+              <Button variant="primary" style={{ flex: 1 }} onClick={() => {
+                navigator.clipboard.writeText(`Patient ID: ${registeredCredentials.patientId}\nPIN: ${registeredCredentials.pin}`);
+                notify("Credentials copied to clipboard!");
+              }}>
+                Copy Details
+              </Button>
+              <Button variant="outline" style={{ flex: 1 }} onClick={() => setRegisteredCredentials(null)}>
+                Dismiss
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      <h2 style={{ color: THEME.textPrimary, marginBottom: 4, fontSize: 22, fontWeight: 800 }}>Patient Registration</h2>
+      <p style={{ color: THEME.textSecondary, marginBottom: 24, fontSize: 13 }}>Register new patients and generate their unique IDs and PINs.</p>
+
+      <Card>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+          <div>
+            <div style={{ color: THEME.textSecondary, fontSize: 11, marginBottom: 6, fontWeight: 600 }}>FULL NAME *</div>
+            <Input placeholder="E.g., John Doe" value={name} onChange={setName} />
+          </div>
+          <div>
+            <div style={{ color: THEME.textSecondary, fontSize: 11, marginBottom: 6, fontWeight: 600 }}>AGE *</div>
+            <Input placeholder="Years" value={age} onChange={setAge} type="number" />
+          </div>
+          <div>
+            <div style={{ color: THEME.textSecondary, fontSize: 11, marginBottom: 6, fontWeight: 600 }}>PHONE NUMBER *</div>
+            <Input placeholder="E.g., 08012345678" value={phone} onChange={setPhone} />
+          </div>
+          <div>
+            <div style={{ color: THEME.textSecondary, fontSize: 11, marginBottom: 6, fontWeight: 600 }}>EMAIL ADDRESS</div>
+            <Input placeholder="Optional" value={email} onChange={setEmail} type="email" />
+          </div>
+          <div>
+            <div style={{ color: THEME.textSecondary, fontSize: 11, marginBottom: 6, fontWeight: 600 }}>TRIAGE PRIORITY</div>
+            <Select value={priority} onChange={setPriority} options={[{value:"NORMAL", label:"🟢 Standard / Non-Urgent"}, {value:"HIGH", label:"🔴 Emergency / Urgent"}]} />
+          </div>
+          <div>
+            <div style={{ color: THEME.textSecondary, fontSize: 11, marginBottom: 6, fontWeight: 600 }}>PATIENT PIN / PASSWORD *</div>
+            <Input placeholder="4-digit PIN (e.g., 1234)" value={pin} onChange={setPin} />
+          </div>
+          
+          <div style={{ borderTop: `1px solid ${THEME.border}`, gridColumn: "1 / -1", paddingTop: 16 }}>
+            <div style={{ color: THEME.textSecondary, fontSize: 11, marginBottom: 6, fontWeight: 600 }}>NEXT OF KIN NAME</div>
+            <Input placeholder="Name and relationship" value={nextOfKin} onChange={setNextOfKin} />
+          </div>
+          <div style={{ gridColumn: "1 / -1", paddingBottom: 16, borderBottom: `1px solid ${THEME.border}` }}>
+            <div style={{ color: THEME.textSecondary, fontSize: 11, marginBottom: 6, fontWeight: 600 }}>NEXT OF KIN PHONE</div>
+            <Input placeholder="Emergency contact number" value={kinPhone} onChange={setKinPhone} />
+          </div>
+
+          <div style={{ gridColumn: "1 / -1" }}>
+            <div style={{ color: THEME.textSecondary, fontSize: 11, marginBottom: 6, fontWeight: 600 }}>INITIAL COMPLAINT</div>
+            <Input placeholder="Why are they visiting today?" value={complaint} onChange={setComplaint} />
+          </div>
+        </div>
+        <div style={{ borderTop: `1px solid ${THEME.border}`, paddingTop: 16, display: "flex", justifyContent: "flex-end" }}>
+          <Button onClick={registerPatient}>
+            <Icon d={Icons.userPlus} size={16} /> Register Patient
+          </Button>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// NURSE: KIOSK VIEW
+function KioskView({ patients, setPatients }) {
+  const [step, setStep] = useState("search"); // search | scanning | result
+  const [searchId, setSearchId] = useState("");
+  const [activePatient, setActivePatient] = useState(null);
+  
+  const [temp, setTemp] = useState(null);
+  const [weight, setWeight] = useState(null);
+  const [scanning, setScanning] = useState(false);
+  const [lcd, setLcd] = useState(["MedFlow Kiosk v2.0", "Ready for Scan", "Enter Patient ID", ""]);
+
+  const lookupPatient = () => {
+    const p = patients.find(pat => pat.patientId === searchId.toUpperCase() || pat.name.toLowerCase().includes(searchId.toLowerCase()));
+    if (p) {
+      setActivePatient(p);
+      setStep("scanning");
+      setLcd([`Found: ${p.name}`, "Ready for Vitals", "Stand on platform", "Press START SCAN"]);
+    } else {
+      setLcd(["Error: Not Found", "Check ID and retry", "", ""]);
+    }
+  };
+
+  const startScan = () => {
+    setScanning(true);
+    setLcd(["Scanning...", "Please stand still", "Reading sensors...", ""]);
+    let t = 0;
+    const interval = setInterval(() => {
+      t++;
+      if (t === 1) setLcd(["Temperature...", "Please hold still", "Contactless scan", "MLX90614 active"]);
+      if (t === 2) {
+        const randTemp = (36.2 + Math.random() * 3).toFixed(1);
+        setTemp(parseFloat(randTemp));
+        setLcd([`Temp: ${randTemp}°C`, "Measuring weight...", "Step on platform", "HX711 reading..."]);
+      }
+      if (t === 3) {
+        const randWeight = (45 + Math.random() * 60).toFixed(1);
+        setWeight(parseFloat(randWeight));
+        setLcd(["Scan Complete!", `Temp: ${temp || 37.2}°C`, `Weight: ${randWeight}kg`, "Saving to records..."]);
+      }
+      if (t === 4) {
+        clearInterval(interval);
+        setScanning(false);
+        setStep("result");
+        setLcd(["Saved OK!", "Vitals Recorded", "Assign doctor in", "Queue Dashboard"]);
+      }
+    }, 1000);
+  };
+
+  const saveVitals = () => {
+    setPatients(prev => prev.map(p => {
+      if (p.id !== activePatient.id) return p;
+      return { ...p, temperature: temp, weight: weight, vitals: true };
+    }));
+    reset();
+  };
+
+  const reset = () => { setStep("search"); setActivePatient(null); setTemp(null); setWeight(null); setSearchId(""); setLcd(["MedFlow Kiosk v2.0", "Ready for Scan", "Enter Patient ID", ""]); };
+
+  return (
+    <div style={{ maxWidth: 800, margin: "0 auto" }}>
+      <h2 style={{ color: THEME.textPrimary, marginBottom: 4, fontSize: 22, fontWeight: 800 }}>Vital-Sign Kiosk</h2>
+      <p style={{ color: THEME.textSecondary, marginBottom: 24, fontSize: 13 }}>Patient identification & IoT sensor array reading.</p>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 20 }}>
+        <Card style={{ fontFamily: "monospace", background: "#0f172a", border: "none" }}>
+          <div style={{ color: "#38bdf8", fontSize: 11, marginBottom: 8, letterSpacing: 1, fontWeight: 700 }}>LCD 20×4 DISPLAY</div>
+          {lcd.map((line, i) => (
+            <div key={i} style={{ color: "#7dd3fc", fontSize: 14, padding: "2px 0", minHeight: 20 }}>
+              {line || " "}
+            </div>
+          ))}
+          <div style={{ marginTop: 16, display: "flex", gap: 6 }}>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", background: scanning ? "#38bdf8" : "#1e293b", boxShadow: scanning ? "0 0 8px #38bdf8" : "none" }} />
+            <div style={{ width: 8, height: 8, borderRadius: "50%", background: temp ? "#38bdf8" : "#1e293b" }} />
+            <div style={{ width: 8, height: 8, borderRadius: "50%", background: weight ? "#38bdf8" : "#1e293b" }} />
+          </div>
+        </Card>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <Card style={{ flex: 1, background: THEME.bg }}>
+            <div style={{ color: THEME.textSecondary, fontSize: 11, marginBottom: 8, fontWeight: 700 }}>TEMPERATURE</div>
+            <div style={{ color: temp ? (temp > 37.5 ? "#ef4444" : THEME.primary) : THEME.textSecondary, fontSize: 32, fontWeight: 800 }}>
+              {temp ? `${temp}°C` : "--.-°C"}
+            </div>
+          </Card>
+          <Card style={{ flex: 1, background: THEME.bg }}>
+            <div style={{ color: THEME.textSecondary, fontSize: 11, marginBottom: 8, fontWeight: 700 }}>WEIGHT</div>
+            <div style={{ color: weight ? THEME.primary : THEME.textSecondary, fontSize: 32, fontWeight: 800 }}>
+              {weight ? `${weight}kg` : "--.-kg"}
+            </div>
+          </Card>
+        </div>
+      </div>
+
+      {step === "search" && (
+        <Card>
+          <div style={{ color: THEME.textSecondary, fontSize: 11, marginBottom: 8, fontWeight: 700 }}>PATIENT LOOKUP</div>
+          <div style={{ display: "flex", gap: 12 }}>
+            <Input placeholder="Enter Patient ID (e.g., PT-1001) or Name" value={searchId} onChange={setSearchId} onKeyDown={e => e.key === 'Enter' && lookupPatient()} style={{ flex: 1 }} />
+            <Button onClick={lookupPatient} disabled={!searchId}>
+              <Icon d={Icons.search} size={15} /> Search
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      {step === "scanning" && (
+        <Card style={{ textAlign: "center", padding: "40px 20px" }}>
+          <div style={{ fontSize: 18, color: THEME.textPrimary, fontWeight: 700, marginBottom: 8 }}>Ready to scan: {activePatient.name}</div>
+          <div style={{ color: THEME.textSecondary, fontSize: 13, marginBottom: 24 }}>ID: {activePatient.patientId} | Age: {activePatient.age}</div>
+          {scanning ? (
+            <div style={{ color: THEME.primary, fontWeight: 600, animation: "pulse 2s infinite" }}>Reading sensors... please wait.</div>
+          ) : (
+            <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+              <Button onClick={startScan}>
+                <Icon d={Icons.thermometer} size={15} /> Start Vitals Scan
+              </Button>
+              <Button variant="outline" onClick={reset}>Cancel</Button>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {step === "result" && (
+        <Card style={{ textAlign: "center" }}>
+          <div style={{ width: 48, height: 48, borderRadius: "50%", background: "#10b98122", color: "#10b981", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
+            <Icon d={Icons.check} size={24} />
+          </div>
+          <div style={{ color: THEME.textPrimary, fontWeight: 700, fontSize: 18, marginBottom: 8 }}>Vitals Captured for {activePatient.name}</div>
+          <div style={{ display: "flex", gap: 12, justifyContent: "center", marginTop: 24 }}>
+            <Button onClick={saveVitals}>Save to Patient Record</Button>
+            <Button variant="outline" onClick={startScan}>Rescan</Button>
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// QUEUE MANAGEMENT VIEW
+function QueueView({ patients, setPatients, currentUser, users }) {
+  const [selectedState, setSelectedState] = useState("ALL");
+  const [assignModal, setAssignModal] = useState(null);
+  const [selectedDoctor, setSelectedDoctor] = useState("");
+  const [notification, setNotification] = useState(null);
+
+  const notify = (msg, type = "success") => {
+    setNotification({ msg, type });
+    setTimeout(() => setNotification(null), 3000);
+  };
+
+  const advanceState = (patientId) => {
+    setPatients(prev => prev.map(p => {
+      if (p.id !== patientId) return p;
+      const idx = QUEUE_STATES.indexOf(p.state);
+      if (idx >= QUEUE_STATES.length - 1) return p;
+      const nextState = QUEUE_STATES[idx + 1];
+      notify(`${p.name} moved to ${STATE_LABELS[nextState]}`);
+      return { ...p, state: nextState };
+    }));
+  };
+
+  const assignDoctor = () => {
+    if (!selectedDoctor) return notify("Please select a doctor", "error");
+    setPatients(prev => prev.map(p => {
+      if (p.id !== assignModal.id) return p;
+      return { ...p, doctor: selectedDoctor, state: "AWAITING_DOCTOR" };
+    }));
+    notify(`${assignModal.name} assigned to ${selectedDoctor}`);
+    setAssignModal(null);
+  };
+
+  let filtered = selectedState === "ALL" ? patients : patients.filter(p => p.state === selectedState);
+  filtered = sortPatients(filtered); // Applies priority sorting
+  
+  const canAdvance = (p) => {
+    if (currentUser.role === "Nurse") return p.state === "AWAITING_TRIAGE";
+    if (currentUser.role === "Doctor") return ["AWAITING_DOCTOR", "AWAITING_DOCTOR_REVIEW"].includes(p.state);
+    if (currentUser.role === "Pharmacist") return p.state === "AWAITING_PHARMACY";
+    if (currentUser.role === "Admin") return p.state !== "DISCHARGED";
+    return false;
+  };
+
+  const doctors = users.filter(u => u.role === "Doctor");
+  const getDoctorLoad = (docName) => patients.filter(p => p.doctor === docName && !["DISCHARGED"].includes(p.state)).length;
+
+  return (
+    <div>
+      {notification && (
+        <div style={{ position: "fixed", top: 20, right: 20, zIndex: 999, background: notification.type === "success" ? "#10b981" : "#ef4444", color: "#fff", padding: "12px 20px", borderRadius: 10, fontWeight: 600, fontSize: 13, boxShadow: "0 4px 20px rgba(0,0,0,0.15)" }}>
+          {notification.msg}
+        </div>
+      )}
+
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
+        <div>
+          <h2 style={{ color: THEME.textPrimary, marginBottom: 4, fontSize: 22, fontWeight: 800 }}>Queue Management</h2>
+          <p style={{ color: THEME.textSecondary, fontSize: 13 }}>Live patient routing & tracking.</p>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 10, marginBottom: 24, flexWrap: "wrap" }}>
+        <button
+          onClick={() => setSelectedState("ALL")}
+          style={{
+            background: selectedState === "ALL" ? THEME.primary : THEME.cardBg,
+            color: selectedState === "ALL" ? "#fff" : THEME.textSecondary,
+            border: `1px solid ${selectedState === "ALL" ? THEME.primary : THEME.border}`,
+            borderRadius: 8, padding: "8px 16px", cursor: "pointer", fontSize: 13, fontWeight: 600, transition: "all 0.2s"
+          }}
+        >
+          All ({patients.length})
+        </button>
+        {QUEUE_STATES.map(state => {
+          const count = patients.filter(p => p.state === state).length;
+          return (
+            <button
+              key={state}
+              onClick={() => setSelectedState(state)}
+              style={{
+                background: selectedState === state ? STATE_COLORS[state] : THEME.cardBg,
+                color: selectedState === state ? "#fff" : THEME.textSecondary,
+                border: `1px solid ${selectedState === state ? STATE_COLORS[state] : THEME.border}`,
+                borderRadius: 8, padding: "8px 16px", cursor: "pointer", fontSize: 13, fontWeight: 600, transition: "all 0.2s"
+              }}
+            >
+              {STATE_LABELS[state]} ({count})
+            </button>
+          );
+        })}
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {filtered.length === 0 && (
+          <Card><div style={{ color: THEME.textSecondary, textAlign: "center", padding: 30 }}>No patients in this queue.</div></Card>
+        )}
+        {filtered.map(p => (
+          <Card key={p.id} style={{ display: "flex", alignItems: "center", gap: 16, padding: "16px 24px", borderLeft: p.priority === "HIGH" ? "4px solid #ef4444" : `1px solid ${THEME.border}` }}>
+            <div style={{ width: 44, height: 44, borderRadius: "50%", background: STATE_COLORS[p.state] + "1A", color: STATE_COLORS[p.state], display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 15, flexShrink: 0 }}>
+              {p.name.split(" ").map(n => n[0]).join("").slice(0, 2)}
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6 }}>
+                <span style={{ color: THEME.textPrimary, fontWeight: 700, fontSize: 15 }}>{p.name}</span>
+                <span style={{ color: THEME.textSecondary, fontSize: 12, background: THEME.bg, padding: "2px 8px", borderRadius: 4 }}>{p.patientId}</span>
+                <PriorityBadge level={p.priority} />
+                <Badge state={p.state} />
+              </div>
+              <div style={{ display: "flex", gap: 16, fontSize: 13, color: THEME.textSecondary, flexWrap: "wrap" }}>
+                <span><strong>Arrived:</strong> {p.arrivalTime || "N/A"}</span>
+                <span><strong>Reason:</strong> {p.complaint}</span>
+                {p.vitals && <span><strong>Vitals:</strong> {p.temperature}°C, {p.weight}kg</span>}
+                {p.doctor && <span><strong>Assigned:</strong> {p.doctor}</span>}
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 10, flexShrink: 0 }}>
+              {p.state === "AWAITING_TRIAGE" && (currentUser.role === "Nurse" || currentUser.role === "Admin") && (
+                <Button small variant="warning" onClick={() => setAssignModal(p)}>
+                  Assign Doctor
+                </Button>
+              )}
+              {canAdvance(p) && p.state !== "AWAITING_TRIAGE" && (
+                <Button small onClick={() => advanceState(p.id)}>
+                  <Icon d={Icons.arrow} size={14} /> Advance Next
+                </Button>
+              )}
+            </div>
+          </Card>
+        ))}
+      </div>
+
+      {assignModal && (
+        <Modal title={`Assign Doctor to ${assignModal.name}`} onClose={() => setAssignModal(null)}>
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ color: THEME.textSecondary, fontSize: 11, marginBottom: 8, fontWeight: 700 }}>SELECT AVAILABLE DOCTOR</div>
+            <Select
+              value={selectedDoctor}
+              onChange={setSelectedDoctor}
+              options={[
+                { value: "", label: "Choose a doctor..." },
+                ...doctors.map(d => {
+                  const load = getDoctorLoad(d.name);
+                  const isFree = load === 0;
+                  return { value: d.name, label: `${isFree ? '🟢' : '🔴'} ${d.name} (${load} patient${load !== 1 ? 's' : ''} assigned)` }
+                })
+              ]}
+            />
+          </div>
+          <Button onClick={assignDoctor} style={{ width: "100%" }}>Confirm Assignment</Button>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// DOCTOR VIEW
+function DoctorView({ patients, setPatients, currentUser, drugs }) {
+  const [selected, setSelected] = useState(null);
+  const [note, setNote] = useState("");
+  const [drug, setDrug] = useState("");
+  const [notification, setNotification] = useState(null);
+
+  const notify = (msg) => { setNotification(msg); setTimeout(() => setNotification(null), 3000); };
+
+  let myPatients = patients.filter(p =>
+    (p.state === "AWAITING_DOCTOR" || p.state === "AWAITING_DOCTOR_REVIEW") && p.doctor === currentUser.name
+  );
+  myPatients = sortPatients(myPatients);
+
+  const saveNote = () => {
+    if (!selected || !note) return;
+    setPatients(prev => prev.map(p => p.id === selected.id ? { ...p, consultationNote: note } : p));
+    setSelected(prev => ({ ...prev, consultationNote: note }));
+    notify("Consultation note saved successfully.");
+  };
+
+  const prescribeDrug = () => {
+    if (!selected || !drug) return;
+    const d = drugs.find(x => x.id === parseInt(drug));
+    if (!d) return;
+    setPatients(prev => prev.map(p => {
+      if (p.id !== selected.id) return p;
+      const updated = { ...p, prescriptions: [...(p.prescriptions || []), { drug: d.name, status: "PENDING" }], state: "AWAITING_PHARMACY" };
+      setSelected(updated);
+      return updated;
+    }));
+    notify(`Prescription sent to pharmacy: ${d.name}`);
+    setDrug("");
+  };
+
+  const removeDrug = (rxIndex) => {
+    if (!selected) return;
+    setPatients(prev => prev.map(p => {
+      if (p.id !== selected.id) return p;
+      const newPrescriptions = [...p.prescriptions];
+      newPrescriptions.splice(rxIndex, 1);
+      // If there are no more prescriptions and we were in AWAITING_PHARMACY, we might drop back to AWAITING_DOCTOR, but it's simpler to just remove it.
+      const updated = { ...p, prescriptions: newPrescriptions };
+      if (newPrescriptions.length === 0 && p.state === "AWAITING_PHARMACY") {
+        updated.state = "AWAITING_DOCTOR_REVIEW";
+      }
+      setSelected(updated);
+      return updated;
+    }));
+    notify("Prescription canceled.");
+  }
+
+  const discharge = () => {
+    if (!selected) return;
+    setPatients(prev => prev.map(p => p.id === selected.id ? { ...p, state: "DISCHARGED" } : p));
+    setSelected(null);
+    notify("Patient discharged (No Meds).");
+  };
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 24, alignItems: "start" }}>
+      {notification && (
+        <div style={{ position: "fixed", top: 20, right: 20, zIndex: 999, background: "#10b981", color: "#fff", padding: "12px 20px", borderRadius: 10, fontWeight: 600, fontSize: 13, boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}>
+          {notification}
+        </div>
+      )}
+
+      {/* Patient List */}
+      <div>
+        <h2 style={{ color: THEME.primary, marginBottom: 4, fontSize: 20, fontWeight: 800 }}>My Patients</h2>
+        <p style={{ color: THEME.textSecondary, fontSize: 13, marginBottom: 20 }}>Select a patient to begin consultation.</p>
+        
+        {myPatients.length === 0 && <Card><div style={{ color: THEME.textSecondary, fontSize: 13, textAlign: "center" }}>No patients assigned.</div></Card>}
+        
+        {myPatients.map(p => (
+          <Card key={p.id} style={{ marginBottom: 12, border: selected?.id === p.id ? `2px solid ${THEME.primary}` : `1px solid ${THEME.border}`, borderLeft: p.priority === "HIGH" ? "4px solid #ef4444" : undefined, padding: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+              <div>
+                <div style={{ color: THEME.textPrimary, fontWeight: 700, fontSize: 15 }}>{p.name}</div>
+                <div style={{ color: THEME.textSecondary, fontSize: 12 }}>{p.patientId} • Age {p.age}</div>
+              </div>
+              <PriorityBadge level={p.priority} />
+            </div>
+            <div style={{ color: THEME.textSecondary, fontSize: 13, marginBottom: 16 }}>
+              <strong>Reason:</strong> {p.complaint}
+            </div>
+            <Button small onClick={() => { setSelected(p); setNote(p.consultationNote || ""); }} style={{ width: "100%" }}>
+              {selected?.id === p.id ? "Consulting..." : "Start Consultation"}
+            </Button>
+          </Card>
+        ))}
+      </div>
+
+      {/* Consultation Panel */}
+      {selected ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <Card style={{ borderTop: `4px solid ${THEME.primary}` }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <div>
+                <h3 style={{ margin: "0 0 4px 0", color: THEME.textPrimary, fontSize: 20 }}>{selected.name}</h3>
+                <div style={{ color: THEME.textSecondary, fontSize: 13, marginBottom: 16 }}>ID: {selected.patientId} | Age: {selected.age} | Arrived: {selected.arrivalTime || "N/A"} | Next of Kin: {selected.nextOfKin || "N/A"}</div>
+              </div>
+              <div style={{ display: "flex", gap: 20, background: THEME.bg, padding: "12px 20px", borderRadius: 8 }}>
+                <div>
+                  <div style={{ color: THEME.textSecondary, fontSize: 11, fontWeight: 600 }}>TEMP</div>
+                  <div style={{ color: selected.temperature > 37.5 ? "#ef4444" : "#10b981", fontWeight: 800, fontSize: 18 }}>{selected.temperature ? `${selected.temperature}°C` : "N/A"}</div>
+                </div>
+                <div>
+                  <div style={{ color: THEME.textSecondary, fontSize: 11, fontWeight: 600 }}>WEIGHT</div>
+                  <div style={{ color: "#10b981", fontWeight: 800, fontSize: 18 }}>{selected.weight ? `${selected.weight}kg` : "N/A"}</div>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ marginTop: 20, paddingTop: 20, borderTop: `1px solid ${THEME.border}` }}>
+              <div style={{ color: THEME.textSecondary, fontSize: 11, fontWeight: 700, marginBottom: 8 }}>MEDICAL HISTORY</div>
+              {selected.history && selected.history.length > 0 ? (
+                <ul style={{ margin: 0, paddingLeft: 20, color: THEME.textPrimary, fontSize: 13 }}>
+                  {selected.history.map((h, i) => <li key={i}>{h}</li>)}
+                </ul>
+              ) : (
+                <div style={{ color: THEME.textSecondary, fontSize: 13, fontStyle: "italic" }}>No prior medical history recorded.</div>
+              )}
+            </div>
+          </Card>
+
+          <Card>
+            <div style={{ color: THEME.textSecondary, fontSize: 11, fontWeight: 700, marginBottom: 8 }}>
+              DIAGNOSIS & CLINICAL NOTES
+            </div>
+            <textarea
+              value={note}
+              onChange={e => setNote(e.target.value)}
+              placeholder="Record clinical findings, diagnosis, and management plan here..."
+              style={{
+                background: "#fff", border: `1px solid ${THEME.border}`, borderRadius: 8,
+                color: THEME.textPrimary, padding: 16, fontSize: 14, width: "100%",
+                minHeight: 120, resize: "vertical", outline: "none", boxSizing: "border-box", fontFamily: "inherit"
+              }}
+            />
+            <div style={{ marginTop: 12, display: "flex", justifyContent: "flex-end" }}>
+              <Button onClick={saveNote}>Save Notes</Button>
+            </div>
+          </Card>
+
+          <Card>
+            <div style={{ color: THEME.textSecondary, fontSize: 11, fontWeight: 700, marginBottom: 8 }}>PRESCRIBE MEDICATION</div>
+            <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+              <Select 
+                value={drug} 
+                onChange={setDrug} 
+                options={[{ value: "", label: "Select a drug to prescribe..." }, ...drugs.map(d => ({ value: String(d.id), label: d.name }))]} 
+                style={{ flex: 1 }}
+              />
+              <Button variant="pink" onClick={prescribeDrug} disabled={!drug}>
+                <Icon d={Icons.pill} size={15} /> Send to Pharmacy
+              </Button>
+            </div>
+            
+            {selected.prescriptions?.length > 0 && (
+              <div style={{ marginTop: 20 }}>
+                <div style={{ color: THEME.textSecondary, fontSize: 11, fontWeight: 700, marginBottom: 8 }}>CURRENT PRESCRIPTIONS</div>
+                {selected.prescriptions.map((rx, i) => (
+                  <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13, color: THEME.textPrimary, padding: "10px 12px", background: THEME.bg, borderRadius: 6, marginBottom: 8 }}>
+                    <strong>{rx.drug}</strong>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <span style={{ color: rx.status === "DISPENSED" ? "#10b981" : "#f59e0b", fontWeight: 700 }}>{rx.status}</span>
+                      {rx.status === "PENDING" && (
+                        <button onClick={() => removeDrug(i)} style={{ background: "transparent", border: "none", color: "#ef4444", cursor: "pointer", display: "flex", alignItems: "center", padding: 4 }}>
+                          <Icon d={Icons.x} size={14} /> Remove
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
+            <Button variant="outline" onClick={discharge}>End Consult & Discharge (No Meds)</Button>
+          </div>
+        </div>
+      ) : (
+        <Card style={{ textAlign: "center", padding: 80, display: "flex", flexDirection: "column", alignItems: "center" }}>
+          <div style={{ color: THEME.border, fontSize: 60, marginBottom: 16 }}>👨‍⚕️</div>
+          <h3 style={{ color: THEME.textPrimary, margin: "0 0 8px 0" }}>No Patient Selected</h3>
+          <div style={{ color: THEME.textSecondary }}>Click on a patient card from the left panel to begin reviewing their case.</div>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// PHARMACY VIEW
+function PharmacyView({ patients, setPatients, drugs, setDrugs }) {
+  const [notification, setNotification] = useState(null);
+  const [newDrugName, setNewDrugName] = useState("");
+  const [newDrugStock, setNewDrugStock] = useState("");
+  // Track which inventory drug the pharmacist has selected per prescription row
+  // Key: "patientId-rxIdx", Value: drug inventory id
+  const [selections, setSelections] = useState({});
+  const notify = (msg, type = "success") => { setNotification({ msg, type }); setTimeout(() => setNotification(null), 3000); };
+
+  let rxPatients = patients.filter(p => p.state === "AWAITING_PHARMACY");
+  rxPatients = sortPatients(rxPatients);
+
+  const selectDrug = (patientId, rxIdx, drugId) => {
+    setSelections(prev => ({ ...prev, [`${patientId}-${rxIdx}`]: drugId }));
+  };
+
+  const dispense = (patientId, rxIdx) => {
+    const key = `${patientId}-${rxIdx}`;
+    const selectedDrugId = selections[key];
+    if (!selectedDrugId) {
+      notify("Please select the drug from inventory first.", "error");
+      return;
+    }
+
+    const invDrug = drugs.find(d => d.id === parseInt(selectedDrugId));
+    if (!invDrug || invDrug.stock <= 0) {
+      notify(`Out of stock: ${invDrug?.name || "Unknown"}`, "error");
+      return;
+    }
+
+    // Deduct stock
+    setDrugs(prev => prev.map(d => d.id === invDrug.id ? { ...d, stock: d.stock - 1 } : d));
+
+    // Mark prescription as dispensed and record what was given
+    setPatients(prev => prev.map(p => {
+      if (p.id !== patientId) return p;
+      const prescriptions = p.prescriptions.map((r, i) => i === rxIdx ? { ...r, status: "DISPENSED", dispensedDrug: invDrug.name } : r);
+      const allDispensed = prescriptions.every(r => r.status === "DISPENSED");
+      return { ...p, prescriptions, state: allDispensed ? "DISCHARGED" : p.state };
+    }));
+
+    // Clear selection
+    setSelections(prev => { const n = { ...prev }; delete n[key]; return n; });
+    notify(`Dispensed ${invDrug.name} for this patient.`);
+  };
+
+  const handleAddNewDrug = (e) => {
+    e.preventDefault();
+    if (!newDrugName.trim() || !newDrugStock) {
+      notify("Please enter drug name and initial stock", "error");
+      return;
+    }
+    // Check if drug already exists
+    if (drugs.some(d => d.name.toLowerCase() === newDrugName.trim().toLowerCase())) {
+      notify("This drug already exists in inventory.", "error");
+      return;
+    }
+
+    const nextId = Math.max(0, ...drugs.map(d => d.id)) + 1;
+    const newDrug = {
+      id: nextId,
+      name: newDrugName.trim(),
+      stock: parseInt(newDrugStock)
+    };
+
+    setDrugs(prev => [...prev, newDrug]);
+    notify(`Added ${newDrugName.trim()} to shelf with ${newDrugStock} units.`);
+    setNewDrugName("");
+    setNewDrugStock("");
+  };
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 24, alignItems: "start" }}>
+      {notification && (
+        <div style={{ position: "fixed", top: 20, right: 20, zIndex: 999, background: notification.type === "error" ? "#ef4444" : "#10b981", color: "#fff", padding: "12px 20px", borderRadius: 10, fontWeight: 600, fontSize: 13, boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}>
+          {notification.msg}
+        </div>
+      )}
+
+      {/* Prescription Worklist */}
+      <div>
+        <h2 style={{ color: "#db2777", marginBottom: 4, fontSize: 20, fontWeight: 800 }}>Pharmacy Orders</h2>
+        <p style={{ color: THEME.textSecondary, fontSize: 13, marginBottom: 20 }}>Select the matching drug from inventory for each prescription, then dispense.</p>
+
+        {rxPatients.length === 0 && <Card><div style={{ color: THEME.textSecondary, textAlign: "center", padding: 40 }}>No pending prescriptions in the queue.</div></Card>}
+        
+        {rxPatients.map(p => (
+          <Card key={p.id} style={{ marginBottom: 16, borderLeft: p.priority === "HIGH" ? "4px solid #ef4444" : undefined }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+              <div>
+                <div style={{ color: THEME.textPrimary, fontWeight: 800, fontSize: 16 }}>{p.name}</div>
+                <div style={{ color: THEME.textSecondary, fontSize: 12 }}>ID: {p.patientId} | Arrived: {p.arrivalTime || "N/A"} | Doctor: {p.doctor}</div>
+                <div style={{ marginTop: 4 }}><PriorityBadge level={p.priority} /></div>
+              </div>
+              <div style={{ textAlign: "right", background: THEME.bg, padding: "6px 12px", borderRadius: 6 }}>
+                <div style={{ color: THEME.textSecondary, fontSize: 10, fontWeight: 700 }}>VITALS</div>
+                <div style={{ color: THEME.textPrimary, fontSize: 12, fontWeight: 600 }}>{p.weight}kg | {p.temperature}°C</div>
+              </div>
+            </div>
+            
+            <div style={{ color: THEME.textSecondary, fontSize: 11, fontWeight: 700, marginBottom: 8 }}>DOCTOR'S PRESCRIPTION ORDER</div>
+            {(p.prescriptions || []).map((rx, i) => {
+              const key = `${p.id}-${i}`;
+              const selectedId = selections[key] || "";
+              const selectedInv = selectedId ? drugs.find(d => d.id === parseInt(selectedId)) : null;
+              return (
+                <div key={i} style={{ padding: "14px", background: THEME.bg, borderRadius: 8, marginBottom: 10, border: `1px solid ${THEME.border}` }}>
+                  {/* What the doctor ordered */}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                    <div>
+                      <div style={{ color: THEME.textSecondary, fontSize: 10, fontWeight: 700, marginBottom: 2 }}>DOCTOR ORDERED</div>
+                      <div style={{ color: THEME.textPrimary, fontSize: 15, fontWeight: 800 }}>💊 {rx.drug}</div>
+                    </div>
+                    <div>
+                      {rx.status === "DISPENSED" ? (
+                        <span style={{ color: "#10b981", fontSize: 12, fontWeight: 800, background: "#10b98115", padding: "4px 10px", borderRadius: 6 }}>✓ DISPENSED{rx.dispensedDrug ? ` (${rx.dispensedDrug})` : ""}</span>
+                      ) : (
+                        <span style={{ color: "#f59e0b", fontSize: 12, fontWeight: 800, background: "#f59e0b15", padding: "4px 10px", borderRadius: 6 }}>⏳ PENDING</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Pharmacist selects from inventory */}
+                  {rx.status === "PENDING" && (
+                    <div style={{ borderTop: `1px dashed ${THEME.border}`, paddingTop: 10, display: "flex", alignItems: "flex-end", gap: 12 }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ color: THEME.textSecondary, fontSize: 10, fontWeight: 700, marginBottom: 4 }}>SELECT FROM INVENTORY</div>
+                        <Select
+                          value={selectedId}
+                          onChange={(val) => selectDrug(p.id, i, val)}
+                          options={[
+                            { value: "", label: "-- Pick drug from shelf --" },
+                            ...drugs.map(d => ({
+                              value: String(d.id),
+                              label: `${d.name}  [${d.stock} in stock]${d.stock <= 0 ? " ⛔" : ""}`
+                            }))
+                          ]}
+                        />
+                      </div>
+                      <Button
+                        small
+                        variant="pink"
+                        onClick={() => dispense(p.id, i)}
+                        disabled={!selectedId || (selectedInv && selectedInv.stock <= 0)}
+                      >
+                        Confirm & Dispense
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </Card>
+        ))}
+      </div>
+
+      {/* Drug Inventory Columns */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+        <Card>
+          <h3 style={{ color: THEME.textPrimary, margin: "0 0 16px", fontSize: 15, fontWeight: 800 }}>
+            Add New Medication
+          </h3>
+          <form onSubmit={handleAddNewDrug} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div>
+              <div style={{ color: THEME.textSecondary, fontSize: 11, marginBottom: 6, fontWeight: 600 }}>DRUG NAME *</div>
+              <Input placeholder="E.g., Paracetamol 500mg" value={newDrugName} onChange={setNewDrugName} />
+            </div>
+            <div>
+              <div style={{ color: THEME.textSecondary, fontSize: 11, marginBottom: 6, fontWeight: 600 }}>INITIAL STOCK *</div>
+              <Input placeholder="E.g., 100" type="number" value={newDrugStock} onChange={setNewDrugStock} />
+            </div>
+            <Button variant="pink" style={{ width: "100%", marginTop: 4 }}>
+              <Icon d={Icons.pill} size={15} /> Add to shelf
+            </Button>
+          </form>
+        </Card>
+
+        <Card style={{ position: "sticky", top: 20 }}>
+          <h3 style={{ color: THEME.textPrimary, margin: "0 0 16px", fontSize: 16, fontWeight: 800 }}>
+            Live Inventory
+          </h3>
+          <div style={{ maxHeight: 300, overflowY: "auto" }}>
+            {drugs.map(d => (
+              <div key={d.id} style={{
+                display: "flex", justifyContent: "space-between", alignItems: "center",
+                padding: "10px 0", borderTop: `1px solid ${THEME.border}`, fontSize: 13,
+              }}>
+                <span style={{ color: THEME.textSecondary, fontWeight: 500 }}>{d.name}</span>
+                <span style={{
+                  fontWeight: 800,
+                  color: d.stock > 20 ? "#10b981" : d.stock > 5 ? "#f59e0b" : "#ef4444",
+                  background: THEME.bg, padding: "2px 8px", borderRadius: 4
+                }}>
+                  {d.stock}
+                </span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+// ADMIN VIEW
+function AdminView({ patients, setPatients, users, setUsers }) {
+  const [showAddStaff, setShowAddStaff] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newRole, setNewRole] = useState("Nurse");
+  const [newPin, setNewPin] = useState("");
+  const [notification, setNotification] = useState(null);
+
+  const notify = (msg) => { setNotification(msg); setTimeout(() => setNotification(null), 4000); };
+
+  const stats = {
+    total: patients.length,
+    triage: patients.filter(p => p.state === "AWAITING_TRIAGE").length,
+    active: patients.filter(p => !["DISCHARGED"].includes(p.state)).length,
+    discharged: patients.filter(p => p.state === "DISCHARGED").length,
+  };
+
+  const addStaff = () => {
+    if (!newName || !newPin) return notify("Name and PIN are required.");
+    if (newPin.length < 4) return notify("PIN must be at least 4 digits.");
+    const newId = Math.max(...users.map(u => u.id)) + 1;
+    const prefix = newRole === "Doctor" ? "Dr. " : newRole === "Nurse" ? "Nurse " : "Pharmacist ";
+    const fullName = newName.startsWith(prefix) ? newName : prefix + newName;
+    setUsers(prev => [...prev, { id: newId, name: fullName, role: newRole, pin: newPin }]);
+    notify(`Added ${fullName} (${newRole}) with PIN ${newPin}`);
+    setNewName(""); setNewPin(""); setShowAddStaff(false);
+  };
+
+  const removeUser = (id) => {
+    if (confirm("Are you sure you want to remove this staff member?")) {
+      setUsers(prev => prev.filter(u => u.id !== id));
+    }
+  }
+
+  const removePatient = (id) => {
+    if (confirm("Are you sure you want to remove this patient from the system?")) {
+      setPatients(prev => prev.filter(p => p.id !== id));
+    }
+  }
+
+  return (
+    <div>
+      {notification && (
+        <div style={{ position: "fixed", top: 20, right: 20, zIndex: 999, background: THEME.primary, color: "#fff", padding: "12px 20px", borderRadius: 10, fontWeight: 600, fontSize: 13, boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}>
+          {notification}
+        </div>
+      )}
+
+      <h2 style={{ color: THEME.primary, marginBottom: 4, fontSize: 22, fontWeight: 800 }}>System Dashboard</h2>
+      <p style={{ color: THEME.textSecondary, fontSize: 13, marginBottom: 24 }}>High-level overview of hospital operations & Staff management.</p>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 }}>
+        <StatCard label="Total Patients" value={stats.total} icon="users" color={THEME.primary} />
+        <StatCard label="In Triage" value={stats.triage} icon="clock" color="#f59e0b" />
+        <StatCard label="Active Care" value={stats.active} icon="activity" color="#8b5cf6" />
+        <StatCard label="Discharged" value={stats.discharged} icon="check" color="#10b981" />
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+        <Card>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <h3 style={{ color: THEME.textPrimary, margin: 0, fontSize: 15, fontWeight: 700 }}>Staff Management</h3>
+            <Button small onClick={() => setShowAddStaff(true)}>
+              <Icon d={Icons.userPlus} size={14} /> Add Staff
+            </Button>
+          </div>
+          {users.map(u => (
+            <div key={u.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderTop: `1px solid ${THEME.border}` }}>
+              <div>
+                <div style={{ color: THEME.textPrimary, fontSize: 14, fontWeight: 600 }}>{u.name}</div>
+                <div style={{ color: THEME.textSecondary, fontSize: 12 }}>{u.role} (PIN: {u.pin})</div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <span style={{ background: "#10b9811A", color: "#10b981", borderRadius: 6, padding: "4px 8px", fontSize: 11, fontWeight: 700 }}>ACTIVE</span>
+                {u.role !== "Admin" && (
+                  <button onClick={() => removeUser(u.id)} style={{ background: "transparent", border: "none", color: "#ef4444", cursor: "pointer", padding: 4 }}>
+                    <Icon d={Icons.trash} size={15} />
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </Card>
+
+        <Card>
+          <h3 style={{ color: THEME.textPrimary, margin: "0 0 16px", fontSize: 15, fontWeight: 700 }}>Patient Directory</h3>
+          <div style={{ maxHeight: 300, overflowY: "auto" }}>
+            {patients.map(p => (
+              <div key={p.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderTop: `1px solid ${THEME.border}` }}>
+                <div>
+                  <div style={{ color: THEME.textPrimary, fontSize: 14, fontWeight: 600 }}>{p.name}</div>
+                  <div style={{ color: THEME.textSecondary, fontSize: 12 }}>{p.patientId} (PIN: <strong style={{ color: "#10b981" }}>{p.pin}</strong>) • {STATE_LABELS[p.state]}</div>
+                </div>
+                <button onClick={() => removePatient(p.id)} style={{ background: "transparent", border: "none", color: "#ef4444", cursor: "pointer", padding: 4 }}>
+                  <Icon d={Icons.trash} size={15} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+
+      {showAddStaff && (
+        <Modal title="Add New Staff Member" onClose={() => setShowAddStaff(false)}>
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ color: THEME.textSecondary, fontSize: 11, marginBottom: 6, fontWeight: 700 }}>STAFF NAME *</div>
+            <Input placeholder="E.g., Adaeze, Chidi Okoro" value={newName} onChange={setNewName} />
+          </div>
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ color: THEME.textSecondary, fontSize: 11, marginBottom: 6, fontWeight: 700 }}>ROLE *</div>
+            <Select value={newRole} onChange={setNewRole} options={[
+              { value: "Nurse", label: "Nurse" },
+              { value: "Doctor", label: "Doctor" },
+              { value: "Pharmacist", label: "Pharmacist" },
+            ]} />
+          </div>
+          <div style={{ marginBottom: 24 }}>
+            <div style={{ color: THEME.textSecondary, fontSize: 11, marginBottom: 6, fontWeight: 700 }}>LOGIN PIN * (min 4 digits)</div>
+            <Input placeholder="E.g., 5555" value={newPin} onChange={setNewPin} type="password" onKeyDown={e => e.key === 'Enter' && addStaff()} />
+          </div>
+          <Button onClick={addStaff} style={{ width: "100%" }}>
+            <Icon d={Icons.userPlus} size={15} /> Create Staff Account
+          </Button>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// PATIENT VIEW
+function PatientView({ patients, currentUser }) {
+  const myRecord = patients.find(p => p.patientId === currentUser.patientId);
+
+  if (!myRecord) {
+    return <Card><div style={{ textAlign: "center", padding: 40, color: THEME.textSecondary }}>Patient record not found. Please contact administration.</div></Card>;
+  }
+
+  const queueForMyState = sortPatients(patients.filter(p => p.state === myRecord.state));
+  const myPositionIndex = queueForMyState.findIndex(p => p.id === myRecord.id);
+  const queuePosition = myPositionIndex + 1;
+  const estimatedWaitMins = queuePosition * 15;
+
+  return (
+    <div style={{ maxWidth: 700, margin: "0 auto" }}>
+      <h2 style={{ color: THEME.primary, marginBottom: 4, fontSize: 22, fontWeight: 800 }}>Patient Portal</h2>
+      <p style={{ color: THEME.textSecondary, fontSize: 13, marginBottom: 24 }}>Welcome back, {myRecord.name}. Arrived at: {myRecord.arrivalTime || "N/A"}. Track your visit in real-time.</p>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+        <Card style={{ background: THEME.primary, color: "#fff", border: "none" }}>
+          <div style={{ fontSize: 13, opacity: 0.8, marginBottom: 4, fontWeight: 600 }}>YOUR QUEUE STATUS</div>
+          <div style={{ fontSize: 28, fontWeight: 900, marginBottom: 4 }}>{STATE_LABELS[myRecord.state]}</div>
+          {myRecord.state !== "DISCHARGED" && (
+            <div style={{ fontSize: 15 }}>You are number <strong>#{queuePosition}</strong> in line.</div>
+          )}
+        </Card>
+
+        {myRecord.state !== "DISCHARGED" && (
+          <Card style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center" }}>
+            <Icon d={Icons.clock} size={28} color={THEME.primary} />
+            <div style={{ color: THEME.textSecondary, fontSize: 12, marginTop: 8, fontWeight: 600 }}>ESTIMATED WAIT TIME</div>
+            <div style={{ color: THEME.textPrimary, fontSize: 24, fontWeight: 800 }}>~{estimatedWaitMins} mins</div>
+          </Card>
+        )}
+      </div>
+
+      <Card style={{ marginBottom: 16 }}>
+        <div style={{ color: THEME.textSecondary, fontSize: 11, marginBottom: 20, fontWeight: 700 }}>YOUR JOURNEY PROGRESS</div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", overflowX: "auto", paddingBottom: 8 }}>
+          {QUEUE_STATES.map((state, i) => {
+            const idx = QUEUE_STATES.indexOf(myRecord.state);
+            const done = i < idx;
+            const current = i === idx;
+            return (
+              <div key={state} style={{ display: "flex", alignItems: "center" }}>
+                <div style={{ textAlign: "center", minWidth: 80 }}>
+                  <div style={{
+                    width: 36, height: 36, borderRadius: "50%",
+                    background: done ? "#10b981" : current ? STATE_COLORS[state] : THEME.bg,
+                    color: done || current ? "#fff" : THEME.textSecondary,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    margin: "0 auto 8px",
+                    fontSize: 14, fontWeight: 700,
+                    boxShadow: current ? `0 0 12px ${STATE_COLORS[state]}66` : "none",
+                  }}>
+                    {done ? "✓" : i + 1}
+                  </div>
+                  <div style={{ color: current ? STATE_COLORS[state] : THEME.textSecondary, fontSize: 11, fontWeight: current ? 800 : 500 }}>
+                    {STATE_LABELS[state].split(" ").slice(-1)[0]}
+                  </div>
+                </div>
+                {i < QUEUE_STATES.length - 1 && (
+                  <div style={{ width: 30, height: 3, background: done ? "#10b981" : THEME.bg, flexShrink: 0 }} />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// LOGIN SCREEN
+// ─────────────────────────────────────────────
+function LoginScreen({ onLogin, patients, users }) {
+  const [mode, setMode] = useState("staff");
+  const [userId, setUserId] = useState(users[0]?.id.toString());
+  const [pin, setPin] = useState("");
+  const [patientId, setPatientId] = useState("");
+  const [error, setError] = useState("");
+
+  const handleLogin = () => {
+    if (mode === "staff") {
+      const user = users.find(u => u.id.toString() === userId);
+      if (user && user.pin === pin) {
+        onLogin({ ...user });
+      } else {
+        setError("Incorrect PIN.");
+        setTimeout(() => setError(""), 3000);
+      }
+    } else {
+      const patient = patients.find(p => p.patientId === patientId.toUpperCase() && p.pin === pin);
+      if (patient) {
+        onLogin({ role: "Patient", name: patient.name, patientId: patient.patientId });
+      } else {
+        setError("Invalid Patient ID or PIN.");
+        setTimeout(() => setError(""), 3000);
+      }
+    }
+  };
+
+  return (
+    <div style={{ minHeight: "100vh", background: THEME.bg, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Segoe UI', system-ui, sans-serif" }}>
+      <div style={{ width: 400 }}>
+        <div style={{ textAlign: "center", marginBottom: 40 }}>
+          <div style={{ width: 64, height: 64, borderRadius: 16, background: THEME.primary, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px", fontSize: 28 }}>🏥</div>
+          <h1 style={{ color: THEME.textPrimary, margin: 0, fontSize: 28, fontWeight: 900, letterSpacing: -1 }}>Med<span style={{ color: THEME.primary }}>Flow</span></h1>
+        </div>
+
+        <Card style={{ padding: 30 }}>
+          <div style={{ display: "flex", marginBottom: 24, background: THEME.bg, borderRadius: 8, padding: 4 }}>
+            <button onClick={() => { setMode("staff"); setError(""); setPin(""); }} style={{ flex: 1, padding: "8px", border: "none", borderRadius: 6, background: mode === "staff" ? "#fff" : "transparent", color: mode === "staff" ? THEME.textPrimary : THEME.textSecondary, fontWeight: 600, cursor: "pointer", boxShadow: mode === "staff" ? "0 1px 3px rgba(0,0,0,0.1)" : "none" }}>Staff Portal</button>
+            <button onClick={() => { setMode("patient"); setError(""); setPin(""); }} style={{ flex: 1, padding: "8px", border: "none", borderRadius: 6, background: mode === "patient" ? "#fff" : "transparent", color: mode === "patient" ? THEME.textPrimary : THEME.textSecondary, fontWeight: 600, cursor: "pointer", boxShadow: mode === "patient" ? "0 1px 3px rgba(0,0,0,0.1)" : "none" }}>Patient Portal</button>
+          </div>
+
+          {mode === "staff" ? (
+            <>
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ color: THEME.textSecondary, fontSize: 11, marginBottom: 8, fontWeight: 700 }}>SELECT STAFF ACCOUNT</div>
+                <Select value={userId} onChange={u => { setUserId(u); setPin(""); }} options={users.map(u => ({ value: u.id.toString(), label: `${u.name} (${u.role})` }))} />
+              </div>
+              <div style={{ marginBottom: 24 }}>
+                <div style={{ color: THEME.textSecondary, fontSize: 11, marginBottom: 8, fontWeight: 700 }}>ACCESS PIN</div>
+                <Input type="password" placeholder="Enter PIN" value={pin} onChange={setPin} onKeyDown={e => e.key === 'Enter' && handleLogin()} />
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ color: THEME.textSecondary, fontSize: 11, marginBottom: 8, fontWeight: 700 }}>PATIENT ID</div>
+                <Input placeholder="E.g., PT-1001" value={patientId} onChange={setPatientId} />
+              </div>
+              <div style={{ marginBottom: 24 }}>
+                <div style={{ color: THEME.textSecondary, fontSize: 11, marginBottom: 8, fontWeight: 700 }}>PERSONAL PIN</div>
+                <Input type="password" placeholder="Enter your PIN" value={pin} onChange={setPin} onKeyDown={e => e.key === 'Enter' && handleLogin()} />
+              </div>
+            </>
+          )}
+
+          {error && <div style={{ color: "#ef4444", fontSize: 13, marginBottom: 16, fontWeight: 600 }}>{error}</div>}
+          
+          <Button onClick={handleLogin} style={{ width: "100%", padding: "12px" }}>
+            <Icon d={Icons.lock} size={15} /> Secure Login
+          </Button>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// MAIN APP
+// ─────────────────────────────────────────────
+const getLocalStorage = (key, fallback) => {
+  try {
+    const item = localStorage.getItem(key);
+    return item ? JSON.parse(item) : fallback;
+  } catch (e) {
+    return fallback;
+  }
+};
+
+function MedFlowApp() {
+  const [currentUser, setCurrentUser] = useState(null);
+  const [activeTab, setActiveTab] = useState("dashboard");
+  
+  const [patients, setPatients] = useState(() => getLocalStorage("medflow_patients", SEED_PATIENTS));
+  const [users, setUsers] = useState(() => getLocalStorage("medflow_users", SEED_USERS));
+  const [patientCounter, setPatientCounter] = useState(() => {
+    const stored = getLocalStorage("medflow_patientCounter", null);
+    if (stored !== null) return stored;
+    return Math.max(8, ...SEED_PATIENTS.map(p => p.id));
+  });
+  const [drugs, setDrugs] = useState(() => getLocalStorage("medflow_drugs", DEFAULT_DRUGS));
+
+  useEffect(() => {
+    localStorage.setItem("medflow_patients", JSON.stringify(patients));
+  }, [patients]);
+
+  useEffect(() => {
+    localStorage.setItem("medflow_users", JSON.stringify(users));
+  }, [users]);
+
+  useEffect(() => {
+    localStorage.setItem("medflow_patientCounter", JSON.stringify(patientCounter));
+  }, [patientCounter]);
+
+  useEffect(() => {
+    localStorage.setItem("medflow_drugs", JSON.stringify(drugs));
+  }, [drugs]);
+
+  const navItems = {
+    Admin: [
+      { id: "dashboard", label: "System Dashboard", icon: "home" },
+      { id: "registration", label: "Registration", icon: "userPlus" },
+      { id: "kiosk", label: "Vitals Kiosk", icon: "thermometer" },
+      { id: "queue", label: "Queue Mgmt", icon: "users" },
+      { id: "consultation", label: "Consultations", icon: "activity" },
+      { id: "pharmacy", label: "Dispensary", icon: "pill" },
+    ],
+    Nurse: [
+      { id: "registration", label: "Registration", icon: "userPlus" },
+      { id: "kiosk", label: "Vitals Kiosk", icon: "thermometer" },
+      { id: "queue", label: "Queue Routing", icon: "users" },
+    ],
+    Doctor: [
+      { id: "consultation", label: "Consultations", icon: "activity" },
+      { id: "queue", label: "Queue Review", icon: "users" },
+    ],
+    Pharmacist: [
+      { id: "pharmacy", label: "Dispensary", icon: "pill" },
+    ],
+    Patient: [
+      { id: "patient", label: "My Portal", icon: "home" },
+    ],
+  };
+
+  const defaultTabs = {
+    Admin: "dashboard", Nurse: "queue", Doctor: "consultation",
+    Pharmacist: "pharmacy", Patient: "patient",
+  };
+
+  const handleLogin = (user) => {
+    setCurrentUser(user);
+    setActiveTab(defaultTabs[user.role]);
+  };
+
+  if (!currentUser) return <LoginScreen onLogin={handleLogin} patients={patients} users={users} />;
+
+  const items = navItems[currentUser.role] || [];
+
+  return (
+    <div style={{ minHeight: "100vh", display: "flex", background: THEME.bg, fontFamily: "'Segoe UI', system-ui, sans-serif", color: THEME.textPrimary }}>
+      {/* Sidebar */}
+      <div style={{ width: 260, background: "#ffffff", borderRight: `1px solid ${THEME.border}`, display: "flex", flexDirection: "column", position: "sticky", top: 0, height: "100vh", boxShadow: "1px 0 10px rgba(0,0,0,0.02)" }}>
+        <div style={{ padding: "24px", borderBottom: `1px solid ${THEME.border}`, display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ width: 32, height: 32, borderRadius: 8, background: THEME.primary, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>🏥</div>
+          <span style={{ fontWeight: 900, fontSize: 20, letterSpacing: -0.5 }}>Med<span style={{ color: THEME.primary }}>Flow</span></span>
+        </div>
+
+        <nav style={{ flex: 1, padding: "24px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ color: THEME.textSecondary, fontSize: 11, fontWeight: 700, paddingLeft: 16, marginBottom: 8, letterSpacing: 0.5 }}>MAIN MENU</div>
+          {items.map(item => (
+            <button
+              key={item.id}
+              onClick={() => setActiveTab(item.id)}
+              style={{
+                background: activeTab === item.id ? THEME.primaryLight : "transparent",
+                border: "none",
+                color: activeTab === item.id ? THEME.primary : THEME.textSecondary,
+                borderRadius: 8,
+                padding: "12px 16px",
+                cursor: "pointer",
+                fontSize: 14,
+                fontWeight: activeTab === item.id ? 700 : 600,
+                display: "flex", alignItems: "center", gap: 12,
+                transition: "all 0.2s",
+                textAlign: "left",
+                width: "100%"
+              }}
+            >
+              <Icon d={Icons[item.icon]} size={18} />
+              {item.label}
+            </button>
+          ))}
+        </nav>
+
+        <div style={{ padding: "24px", borderTop: `1px solid ${THEME.border}`, background: "#f8fafc" }}>
+          <div style={{ fontSize: 14, color: THEME.textPrimary, fontWeight: 700, marginBottom: 4 }}>{currentUser.name}</div>
+          <div style={{ fontSize: 12, color: THEME.textSecondary, marginBottom: 16, fontWeight: 500 }}>{currentUser.role}</div>
+          <Button style={{ width: "100%", justifyContent: "center" }} variant="outline" onClick={() => setCurrentUser(null)}>
+            <Icon d={Icons.logout} size={15} /> Sign Out
+          </Button>
+        </div>
+      </div>
+
+      {/* Main Content Area */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
+        {/* Top Header */}
+        <div style={{ height: 72, borderBottom: `1px solid ${THEME.border}`, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 36px", background: "#ffffff" }}>
+          <h2 style={{ margin: 0, fontSize: 20, color: THEME.textPrimary, fontWeight: 800 }}>
+            {items.find(i => i.id === activeTab)?.label || "Dashboard"}
+          </h2>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#10b98115", padding: "6px 12px", borderRadius: 20 }}>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#10b981", animation: "pulse 2s infinite" }} />
+            <span style={{ color: "#059669", fontWeight: 700, fontSize: 12 }}>System Live</span>
+          </div>
+        </div>
+
+        {/* Scrollable Content */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "36px" }}>
+          {activeTab === "dashboard" && <AdminView patients={patients} setPatients={setPatients} users={users} setUsers={setUsers} />}
+          {activeTab === "registration" && <RegistrationView patients={patients} setPatients={setPatients} patientCounter={patientCounter} setPatientCounter={setPatientCounter} />}
+          {activeTab === "kiosk" && <KioskView patients={patients} setPatients={setPatients} />}
+          {activeTab === "queue" && <QueueView patients={patients} setPatients={setPatients} currentUser={currentUser} users={users} />}
+          {activeTab === "consultation" && <DoctorView patients={patients} setPatients={setPatients} currentUser={currentUser} drugs={drugs} />}
+          {activeTab === "pharmacy" && <PharmacyView patients={patients} setPatients={setPatients} drugs={drugs} setDrugs={setDrugs} />}
+          {activeTab === "patient" && <PatientView patients={patients} currentUser={currentUser} />}
+        </div>
+      </div>
+      <style>{`
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+        * { box-sizing: border-box; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+      `}</style>
+    </div>
+  );
+}
+
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<MedFlowApp />);
+  </script>
+</body>
+</html>
