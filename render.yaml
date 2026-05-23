@@ -1,0 +1,7 @@
+services:
+  - type: static_site
+    name: medflapp
+    repo: https://github.com/Builderskelechi/MEDFLAPP
+    branch: master
+    buildCommand: ""
+    staticPublishPath: .
