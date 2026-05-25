@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8" />
@@ -498,30 +498,39 @@ function KioskView({ patients, setPatients }) {
     }
   };
 
-  const startScan = () => {
+  const startScan = async () => {
     setScanning(true);
-    setLcd(["Scanning...", "Please stand still", "Reading sensors...", ""]);
-    let t = 0;
-    const interval = setInterval(() => {
-      t++;
-      if (t === 1) setLcd(["Temperature...", "Please hold still", "Contactless scan", "MLX90614 active"]);
-      if (t === 2) {
-        const randTemp = (36.2 + Math.random() * 3).toFixed(1);
-        setTemp(parseFloat(randTemp));
-        setLcd([`Temp: ${randTemp}°C`, "Measuring weight...", "Step on platform", "HX711 reading..."]);
+    setLcd(["Scanning...", "Waiting for ESP32", "Ensure device is", "powered on..."]);
+
+    let attempts = 0;
+    const maxAttempts = 20; // wait up to 30 seconds
+
+    const poll = setInterval(async () => {
+      attempts++;
+      try {
+        const res = await fetch(`/api/vitals/${activePatient.patientId}`);
+        const data = await res.json();
+
+        if (data && data.temperature && data.weight) {
+          clearInterval(poll);
+          setTemp(data.temperature);
+          setWeight(data.weight);
+          setScanning(false);
+          setStep("result");
+          setLcd(["Scan Complete!", `Temp: ${data.temperature}°C`, `Weight: ${data.weight}kg`, "Saving to records..."]);
+        } else {
+          setLcd(["Waiting for ESP32...", `Attempt ${attempts}/${maxAttempts}`, "Stand on platform", "Hold still..."]);
+        }
+      } catch (err) {
+        setLcd(["Connection error", "Check server", `Attempt ${attempts}`, ""]);
       }
-      if (t === 3) {
-        const randWeight = (45 + Math.random() * 60).toFixed(1);
-        setWeight(parseFloat(randWeight));
-        setLcd(["Scan Complete!", `Temp: ${temp || 37.2}°C`, `Weight: ${randWeight}kg`, "Saving to records..."]);
-      }
-      if (t === 4) {
-        clearInterval(interval);
+
+      if (attempts >= maxAttempts) {
+        clearInterval(poll);
         setScanning(false);
-        setStep("result");
-        setLcd(["Saved OK!", "Vitals Recorded", "Assign doctor in", "Queue Dashboard"]);
+        setLcd(["Scan Timeout", "No data received", "Check ESP32", "and try again"]);
       }
-    }, 1000);
+    }, 1500);
   };
 
   const saveVitals = () => {
