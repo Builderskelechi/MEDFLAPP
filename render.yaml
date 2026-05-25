@@ -1,6 +1,8 @@
 services:
   - type: web
     name: medflapp
+    repo: https://github.com/Builderskelechi/MEDFLAPP
+    branch: master
     env: node
     buildCommand: npm install
     startCommand: npm start
