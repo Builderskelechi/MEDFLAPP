@@ -1,4 +1,9 @@
 {
-  "version": 3,
-  "name": "medflapp"
+  services:
+  - type: web
+    name: medflapp
+    env: node
+    buildCommand: npm install
+    startCommand: npm start
+    plan: free
 }
