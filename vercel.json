@@ -1,4 +1,4 @@
-{
+
   services:
   - type: web
     name: medflapp
@@ -6,4 +6,4 @@
     buildCommand: npm install
     startCommand: npm start
     plan: free
-}
+
