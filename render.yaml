@@ -1,7 +1,7 @@
 services:
-  - type: static_site
+  - type: web
     name: medflapp
-    repo: https://github.com/Builderskelechi/MEDFLAPP
-    branch: master
-    buildCommand: ""
-    staticPublishPath: .
+    env: node
+    buildCommand: npm install
+    startCommand: npm start
+    plan: free
